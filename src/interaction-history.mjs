@@ -37,17 +37,18 @@ export function normalizeInteraction(item) {
   };
 }
 
-/** App-only export is separate from delegated Copilot Chat. No default credential or live enablement. */
+/** App-only export for the optional history tools in this MCP server. */
 export function createInteractionHistoryReader({
   tenantId, userId, boundSubject, from, to, deadline, getToken,
-  maxRequests = 10, allowedSessionIds = [], fetchImpl = fetch, onAudit = () => {},
+  maxRequests = 10, allowedSessionIds, fetchImpl = fetch, onAudit = () => {},
 }) {
   if (!guid.test(tenantId ?? '') || !guid.test(userId ?? '') || boundSubject !== `${tenantId}:${userId}`) fail('HISTORY_IDENTITY_NOT_BOUND');
   const start = Date.parse(from), end = Date.parse(to);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || end - start > 3 * 86400000) fail('INVALID_HISTORY_WINDOW');
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || end - start > 5 * 366 * 86400000) fail('INVALID_HISTORY_WINDOW');
   if (!Number.isFinite(deadline) || typeof getToken !== 'function' || !Number.isInteger(maxRequests) || maxRequests < 1 || maxRequests > 32) fail('INVALID_HISTORY_POLICY');
-  if (!allowedSessionIds.length || allowedSessionIds.some(id => typeof id !== 'string' || !id)) fail('HISTORY_SESSION_SELECTION_REQUIRED');
-  const allow = new Set(allowedSessionIds);
+  if (allowedSessionIds !== undefined && (!Array.isArray(allowedSessionIds) || allowedSessionIds.some(id => typeof id !== 'string' || !id))) fail('INVALID_HISTORY_SESSION_SELECTION');
+  // Omit the allowlist to discover all sessions returned for the bound user and date window.
+  const allow = allowedSessionIds === undefined ? null : new Set(allowedSessionIds);
   const path = `/v1.0/copilot/users/${userId}/interactionHistory/getAllEnterpriseInteractions`;
   let used = 0, cached = null, inFlight = null, revoked = false;
   const active = () => { if (revoked) fail('HISTORY_REVOKED'); if (Date.now() >= deadline) fail('HISTORY_ACCESS_EXPIRED'); };
@@ -80,7 +81,7 @@ export function createInteractionHistoryReader({
       for (const item of data.value) {
         // Microsoft grants tenant-wide application access. This is an additional local restriction,
         // not a claim that the Graph permission itself is scoped to these selected sessions.
-        if (!allow.has(item.sessionId)) continue;
+        if (allow && !allow.has(item.sessionId)) continue;
         const record = normalizeInteraction(item);
         const created = Date.parse(record.createdAt);
         if (created <= start || created >= end) continue;
@@ -106,15 +107,15 @@ export function createInteractionHistoryReader({
     await inFlight;
   }
   return {
-    status: () => ({route:'Microsoft Graph Interaction Export v1.0',permission:'AiEnterpriseInteraction.Read.All application',requestsUsed:used,maxRequests,from,to,configured:true,providerReadCompleted:cached!==null,revoked,expired:Date.now()>=deadline,selectedSessionCount:allow.size}),
+    status: () => ({route:'Microsoft Graph Interaction Export v1.0',permission:'AiEnterpriseInteraction.Read.All application',requestsUsed:used,maxRequests,from,to,configured:true,providerReadCompleted:cached!==null,revoked,expired:Date.now()>=deadline,selectedSessionCount:allow?.size ?? null}),
     async list() {
       await ready();
-      return {source:'Microsoft Graph Interaction Export v1.0',scope:'explicitly selected sessions and date window',paginationComplete:true,fullLifetimeHistory:false,
+      return {source:'Microsoft Graph Interaction Export v1.0',scope:allow?'explicitly selected sessions and date window':'bound user and date window',paginationComplete:true,fullLifetimeHistory:false,
         sessions:[...cached].map(([sessionId,messages])=>({sessionId,messageCount:messages.length,firstAt:messages[0].createdAt,lastAt:messages.at(-1).createdAt,preview:messages.find(m=>m.role==='user')?.text.slice(0,160) ?? '',appClasses:[...new Set(messages.map(m=>m.appClass))]})),
-        missingSelectedSessions:[...allow].filter(id=>!cached.has(id))};
+        missingSelectedSessions:allow?[...allow].filter(id=>!cached.has(id)):[]};
     },
     async read(sessionId) {
-      active(); if (!allow.has(sessionId)) fail('HISTORY_SESSION_NOT_SELECTED');
+      active(); if (allow && !allow.has(sessionId)) fail('HISTORY_SESSION_NOT_SELECTED');
       await ready();
       if (!cached.has(sessionId)) fail('HISTORY_SESSION_NOT_RETURNED');
       return {source:'Microsoft Graph Interaction Export v1.0',sessionId,from,to,paginationComplete:true,fullLifetimeHistory:false,

@@ -1,6 +1,6 @@
 # 开发者接入指南
 
-本指南说明如何在自己的电脑上运行单账号 Microsoft 365 Copilot MCP 服务，并从兼容的 MCP 客户端连接。使用者需要 Microsoft 365 Copilot 附加许可；组织需评估 [Chat API 预览条款](https://learn.microsoft.com/en-us/legal/m365-copilot-apis/terms-of-use)。微软将当前 `/beta` 接口标注为不支持生产应用。
+本指南说明如何在自己的电脑上运行单账号 Microsoft 365 Copilot MCP 服务，并从兼容的 MCP 客户端连接。默认可与 Copilot 对话；管理员完成历史读取授权并配置证书后，同一个 MCP 连接还会提供旧会话工具。使用者需要 Microsoft 365 Copilot 附加许可；组织需评估 [Chat API 预览条款](https://learn.microsoft.com/en-us/legal/m365-copilot-apis/terms-of-use)。微软将当前 Chat `/beta` 接口标注为不支持生产应用。
 
 ## 1. 在 Microsoft Entra 注册应用
 
@@ -8,7 +8,7 @@
 
 给此应用配置 Microsoft Graph **委托权限**，七项必须齐全：`Sites.Read.All`、`Mail.Read`、`People.Read.All`、`OnlineMeetingTranscript.Read.All`、`Chat.Read`、`ChannelMessage.Read.All`、`ExternalItem.Read.All`。按组织策略完成管理员同意；用户以自己的身份登录。权限可涉及该用户有权访问的文件、邮件、聊天等数据。[微软的创建会话文档](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/ai-services/chat/copilotroot-post-conversations)列出了当前必需权限。
 
-`AiEnterpriseInteraction.Read.All` 是**另一条历史导出路径**的应用权限，普通问答不需要它。不要为了跑通本指南顺手添加该权限。
+普通问答不需要 `AiEnterpriseInteraction.Read.All`。只有组织决定在这个 MCP 服务中启用历史会话读取时，才按下文配置该应用权限。
 
 ## 2. 配置服务与 MCP 客户端
 
@@ -49,7 +49,26 @@ Copy-Item .env.example .env
 {"question":"根据我有权访问的工作资料，概括本周项目风险。","contextIds":[]}
 ```
 
-普通问答的远程会话句柄仅在当前个人连接内有效；进程重启需要重新连接。它不会恢复 Copilot 网页中的旧会话。历史原文要走单独的 [Interaction Export 路径](architecture.md)，由组织管理员授权并由部署方接入。指定 Copilot Studio Agent、Pages / Notebooks 结构化迁移及 Cowork 续跑均不由当前服务提供。
+普通问答的远程会话句柄仅在当前个人连接内有效；进程重启需要重新连接。它不会恢复 Copilot 网页中的旧会话。若启用下述历史工具，可以在同一 MCP 连接中读取旧会话的提问和回答。指定 Copilot Studio Agent、Pages / Notebooks 结构化迁移及 Cowork 续跑均不由当前服务提供。
+
+## 可选：启用历史会话读取
+
+历史读取使用的是 Microsoft Graph 的 Interaction Export API。它返回微软已记录的用户提问与 Copilot 回答，并带有 `sessionId`；本服务可先列出会话，再读取选中的会话，**无需预先填写会话 ID**。它不会恢复 Copilot 网页的会话界面，也不保证涵盖所有 Copilot 体验或附件正文。[微软接口文档](https://learn.microsoft.com/en-us/graph/api/aiInteractionHistory-getAllEnterpriseInteractions)说明了返回范围和许可要求。
+
+1. 在 [Microsoft Entra 管理中心](https://entra.microsoft.com/)打开同一个应用注册，进入 **Entra ID → App registrations → 应用 → API permissions → Add a permission → Microsoft Graph → Application permissions**，添加 `AiEnterpriseInteraction.Read.All`。由有权授予该权限的管理员点击 **Grant admin consent**，在权限状态中确认已授权。这里是租户级应用授权，普通用户的 OAuth 登录不能代替它；服务只查询当前允许登录的用户。[微软的配置与管理员同意说明](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-access-web-apis)
+2. 在该应用的 **Certificates & secrets → Certificates** 上传公钥证书；把对应私钥作为 PEM 文件保存在运行服务的机器上，且不要提交到仓库。记录证书的 SHA-256 thumbprint。服务通过证书取得应用令牌，私钥不得交给 MCP 客户端。[微软的证书配置说明](https://learn.microsoft.com/en-us/entra/msal/javascript/node/certificate-credentials)
+3. 在 `.env` 中增加以下配置，然后重启服务。查询范围由用户、起止时间和最大请求数共同限定；本项目不会自行在 Entra 中申请管理员同意。
+
+```dotenv
+M365_MCP_HISTORY_ENABLED=true
+M365_MCP_HISTORY_PRIVATE_KEY_PATH=path/to/private.key
+M365_MCP_HISTORY_CERT_THUMBPRINT_SHA256=your-64-character-sha256-thumbprint
+M365_MCP_HISTORY_FROM=2026-01-01T00:00:00Z
+M365_MCP_HISTORY_TO=2026-10-01T00:00:00Z
+M365_MCP_HISTORY_MAX_REQUESTS=10
+```
+
+4. 从同一 MCP 客户端重新连接，先看 `microsoft_connection_status`，再调用 `microsoft_list_copilot_history` 列出日期范围内的会话，选一个返回的 `sessionId` 调用 `microsoft_read_copilot_history`。如结果太多触发分页或记录上限，缩小日期范围后重试；服务不会把未读完的结果当作完整历史。私钥配置或管理员同意缺失时，历史调用不会成功。
 
 ## 常见排查
 

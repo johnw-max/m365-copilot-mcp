@@ -14,6 +14,14 @@ test('paginates selected history, deduplicates and preserves raw data without le
   const history=await reader.read('selected');assert.deepEqual(history.messages[0].raw,raw);assert.equal(calls,2);
   await assert.rejects(reader.read('other'),/HISTORY_SESSION_NOT_SELECTED/);
 });
+test('discovers session IDs from Microsoft without a preselected list',async()=>{
+  const {allowedSessionIds,...unrestricted}=options();
+  const reader=createInteractionHistoryReader({...unrestricted,fetchImpl:async()=>Response.json({value:[item('one'),item('two','other')]})});
+  const list=await reader.list();
+  assert.deepEqual(list.sessions.map(session=>session.sessionId),['selected','other']);
+  assert.equal(list.scope,'bound user and date window');
+  assert.equal((await reader.read('other')).messages[0].id,'two');
+});
 test('rejects cross-origin pagination before sending a token',async()=>{
   let calls=0;const reader=createInteractionHistoryReader({...options(),fetchImpl:async()=>{calls++;return Response.json({value:[],'@odata.nextLink':'https://example.invalid/steal'});}});
   await assert.rejects(reader.list(),/UNTRUSTED_HISTORY_PAGE/);assert.equal(calls,1);
@@ -30,9 +38,9 @@ test('adaptive-card text and original content survive, action instructions are n
   const raw=item('one','selected',{body:{contentType:'html',content:'<attachment id="x"></attachment>'},attachments:[{contentType:'application/vnd.microsoft.card.adaptive',content:JSON.stringify({body:[{type:'TextBlock',text:'A prior decision'}],actions:[{type:'Action.OpenUrl',url:'https://example.invalid',title:'Do not run'}]})}]});
   const normalized=normalizeInteraction(raw);assert.equal(normalized.text,'A prior decision');assert.deepEqual(normalized.raw,raw);assert.match(normalized.rawSha256,/^[a-f0-9]{64}$/);
 });
-test('identity mismatch and omitted selection fail before network',()=>{
+test('identity mismatch and invalid selection fail before network',()=>{
   assert.throws(()=>createInteractionHistoryReader({...options(),boundSubject:'another:user'}),/HISTORY_IDENTITY_NOT_BOUND/);
-  assert.throws(()=>createInteractionHistoryReader({...options(),allowedSessionIds:[]}),/HISTORY_SESSION_SELECTION_REQUIRED/);
+  assert.throws(()=>createInteractionHistoryReader({...options(),allowedSessionIds:['']}),/INVALID_HISTORY_SESSION_SELECTION/);
 });
 test('revocation and expiry reject reads, including cached records',async()=>{
   const reader=createInteractionHistoryReader({...options(),fetchImpl:async()=>Response.json({value:[item('one')]})});

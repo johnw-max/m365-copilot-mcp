@@ -7,6 +7,7 @@ import { createOAuthProvider, page } from './oauth.mjs';
 import { buildMcpServer } from './mcp.mjs';
 import { pathToFileURL } from 'node:url';
 import { config, assertRunnableConfig } from './config.mjs';
+import { createHistoryReaderFactory } from './history-auth.mjs';
 
 const maxTimerDelay = 2 ** 31 - 1;
 export function scheduleShutdown(deadline, stop, {now = Date.now, schedule = setTimeout} = {}) {
@@ -54,7 +55,7 @@ if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   const port=Number(process.env.M365_MCP_PORT??8787);
   const origin=process.env.M365_MCP_ORIGIN??`http://127.0.0.1:${port}`;
   const audit=event=>console.log(JSON.stringify({time:new Date().toISOString(),...event}));
-  const connectionOptions={onAudit:audit};
+  const connectionOptions={onAudit:audit,historyReaderFactory:createHistoryReaderFactory()};
   const {app,provider}=createApp(origin,{onAudit:audit,connectionOptions});
   const listener=app.listen(port,'127.0.0.1',()=>console.log(JSON.stringify({event:'listening',origin,mcp:`${origin}/mcp`})));
   async function stop(){listener.close();await provider.close();process.exit(0);}
