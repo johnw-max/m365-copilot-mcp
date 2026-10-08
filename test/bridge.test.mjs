@@ -30,12 +30,35 @@ test('context and conversation remain personal; inline context, same remote cont
   await assert.rejects(a.ask({question:'over limit'}),/CALL_LIMIT_REACHED/);
   assert.equal(requests.length,3);
 });
+test('connection status reports the shared Chat API budget across reconnects',async()=>{
+  const budget={used:0,max:2};
+  const fetchImpl=async url=>Response.json(url.endsWith('/conversations')?{id:'remote-1'}:{messages:[{text:'answer'}]});
+  const first=createConnection(identity(),{deadline:Date.now()+60000,maxRequests:2,budget,fetchImpl});
+  await first.ask({question:'test'});
+  const second=createConnection(identity(),{deadline:Date.now()+60000,maxRequests:2,budget,fetchImpl});
+  assert.equal(second.status().graphRequestsUsed,0);
+  assert.equal(second.status().serviceGraphRequestsUsed,2);
+  await assert.rejects(second.ask({question:'another'}),/CALL_LIMIT_REACHED/);
+});
 test('provider denial is not retried; revoked and expired connections fail closed',async()=>{
   let requests=0;
   const a=createConnection(identity(),{deadline:Date.now()+60000,fetchImpl:async()=>{requests++;return new Response('sensitive provider detail',{status:403});}});
   await assert.rejects(a.ask({question:'test'}),/^Error: GRAPH_HTTP_403$/);assert.equal(requests,1);
   await a.disconnect();await assert.rejects(a.ask({question:'test'}),/CONNECTION_REVOKED/);
   const expired=createConnection(identity(),{deadline:0});await assert.rejects(expired.ask({question:'test'}),/CONNECTION_EXPIRED/);
+});
+test('a failed first chat does not retain an unusable conversation handle',async()=>{
+  let calls=0;
+  const a=createConnection(identity(),{deadline:Date.now()+60000,fetchImpl:async(url)=>{
+    calls++;
+    if(url.endsWith('/conversations')) return Response.json({id:'remote-'+calls});
+    if(calls===2) return new Response('provider unavailable',{status:503});
+    return Response.json({messages:[{text:'recovered'}]});
+  }});
+  await assert.rejects(a.ask({question:'first attempt'}),/GRAPH_HTTP_503/);
+  const retry=await a.ask({question:'retry'});
+  assert.equal(retry.conversationHandle.length,36);
+  assert.equal(calls,4);
 });
 
 test('real HTTP OAuth and MCP contract: anonymous rejection, CSRF, PKCE, redirect, replay, audience, refresh, revoke',async t=>{

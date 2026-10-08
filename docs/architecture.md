@@ -25,9 +25,9 @@ sequenceDiagram
   Client-->>User: 展示或处理结果
 ```
 
-`microsoft_import_context` 保存用户明确提供的文字快照；它不从 Microsoft 自动读取文件或聊天。Chat API 新生成的回答不等于旧聊天原文。启用历史工具后，`microsoft_list_copilot_history` 在配置的时间范围内读取该用户的交互并从微软返回结果提取会话 ID；`microsoft_read_copilot_history` 按 ID 读取对应的提问和回答。无需先手工找出会话 ID。微软说明该历史接口不返回 Copilot Studio 创建的 Agent 的交互；Copilot Studio Agent 配置、Notebook 结构与 Cowork 任务状态也不由本服务导出。
+`microsoft_import_context` 保存用户明确提供的文字快照；它不从 Microsoft 自动读取文件或聊天。Chat API 新生成的回答不等于旧聊天原文。启用历史工具后，`microsoft_list_copilot_history` 在配置的时间范围内读取该用户的交互并从微软返回结果提取会话 ID；`microsoft_read_copilot_history` 按 ID 分页读取提问和回答，默认输出便于阅读的文字，可选输出微软返回的原始记录。单次输出超过 2 MiB 时会明确报错，需缩小消息页或关闭原始记录输出。无需先手工找出会话 ID。微软说明该历史接口不返回 Copilot Studio 创建的 Agent 的交互；Copilot Studio Agent 配置、Notebook 结构与 Cowork 任务状态也不由本服务导出。
 
-需要历史读取时，在同一 Entra 应用中添加应用权限、由管理员同意，并上传证书；服务使用部署方配置的私钥取得应用令牌。读取器限定目标用户和日期范围、核对分页来源并限制请求数量。可选的会话 ID 白名单仍供开发者收窄结果，但默认会从微软返回数据中发现会话；微软 API 本身也不要求预先知道会话 ID。请求上限或记录上限中断分页时，服务会报错，不会将不完整列表标为完整。不要把个人 Chat 令牌传给历史接口。[微软接口说明](https://learn.microsoft.com/en-us/graph/api/aiInteractionHistory-getAllEnterpriseInteractions)给出了按用户取全部交互的请求示例、日期筛选和返回的 `sessionId`。
+需要历史读取时，在同一 Entra 应用中添加应用权限、由管理员同意，并上传证书；服务使用部署方配置的私钥取得应用令牌。读取器绑定登录用户，允许每次查询在配置的总日期范围内进一步缩小；还核对分页来源、限制单次四页与全进程请求总数。可选的会话 ID 白名单仍供开发者收窄结果，但默认会从微软返回数据中发现会话；微软 API 本身也不要求预先知道会话 ID。范围过大时返回明确错误，用户可缩小日期重试；服务不会将未读完的列表标为完整。文字查找在已取回的记录中本地进行，微软接口没有提供这里使用的全文搜索参数。不要把个人 Chat 令牌传给历史接口。[微软接口说明](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/ai-services/interaction-export/aiinteractionhistory-getallenterpriseinteractions)给出了按用户取全部交互的请求示例、日期筛选和返回的 `sessionId`。
 
 ## 当前代码的部署约束
 
@@ -43,7 +43,7 @@ sequenceDiagram
 
 - [Microsoft 365 Copilot Chat API 概览与许可](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/ai-services/chat/overview)
 - [创建 Copilot 会话所需权限](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/ai-services/chat/copilotroot-post-conversations)
-- [Interaction Export API](https://learn.microsoft.com/en-us/graph/api/aiInteractionHistory-getAllEnterpriseInteractions)
+- [Interaction Export API](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/ai-services/interaction-export/aiinteractionhistory-getallenterpriseinteractions)
 - [在 Microsoft Entra 配置应用权限和管理员同意](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-access-web-apis)
 - [MSAL Node 使用证书凭据](https://learn.microsoft.com/en-us/entra/msal/javascript/node/certificate-credentials)
 - [Microsoft 365 Copilot APIs 预览条款](https://learn.microsoft.com/en-us/legal/m365-copilot-apis/terms-of-use)
