@@ -39,7 +39,7 @@ Copy-Item .env.example .env
 node --env-file=.env src/server.mjs
 ```
 
-Entra 应用的本机登录回调是 `http://localhost:8788`；MCP 客户端的 OAuth 回调是另一条地址，必须精确列入 `M365_MCP_REDIRECT_URIS`。客户端回调可以是 HTTPS，或仅限本机的 HTTP 回环地址。服务默认监听 `127.0.0.1:8787`，MCP 地址为 `http://127.0.0.1:8787/mcp`。完整配置与首次验收见[开发者接入指南](docs/developer-setup.md)。远端客户端需要受控的 HTTPS 入口；不要将本地服务直接暴露在公网。
+Entra 应用的本机登录回调是 `http://localhost:8788`；MCP 客户端的 OAuth 回调是另一条地址，必须精确列入 `M365_MCP_REDIRECT_URIS`。客户端回调可以是 HTTPS，或仅限本机的 HTTP 回环地址。还须配置用户的 IANA 时区 `M365_MCP_TIME_ZONE`。服务默认监听 `127.0.0.1:8787`，MCP 地址为 `http://127.0.0.1:8787/mcp`。完整配置与首次验收见[开发者接入指南](docs/developer-setup.md)。远端客户端需要受控的 HTTPS 入口；不要将本地服务直接暴露在公网。
 
 运行 `npm test` 可离线检查 OAuth / MCP 契约、会话隔离、调用上限及历史分页与筛选；测试不调用微软。
 

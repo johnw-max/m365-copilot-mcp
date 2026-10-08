@@ -22,6 +22,7 @@ test('context and conversation remain personal; inline context, same remote cont
   await assert.rejects(b.ask({question:'test',contextIds:[context.id]}),/CONTEXT_NOT_OWNED/);
   const first=await a.ask({question:'calculate',contextIds:[context.id]});
   assert.match(requests[1].body.message.text,/synthetic committed 120000/);
+  assert.equal(requests[1].body.locationHint.timeZone,config.timeZone);
   assert.equal(requests[1].body.contextualResources.webContext.isWebEnabled,false);
   await assert.rejects(b.ask({question:'steal',conversationHandle:first.conversationHandle}),/CONVERSATION_NOT_OWNED/);
   await a.ask({question:'continue',conversationHandle:first.conversationHandle});

@@ -7,6 +7,7 @@ export const config = Object.freeze({
   allowedUsername: (process.env.M365_MCP_ALLOWED_USERNAME ?? '').toLowerCase(),
   mcpClientId: process.env.M365_MCP_OAUTH_CLIENT_ID ?? 'm365-copilot-local',
   redirects: list(process.env.M365_MCP_REDIRECT_URIS),
+  timeZone: process.env.M365_MCP_TIME_ZONE ?? '',
   maxGraphRequests,
   expiresAt: process.env.M365_MCP_EXPIRES_AT ?? '1970-01-01T00:00:00Z',
   graphScopes: [
@@ -31,6 +32,8 @@ export function assertRunnableConfig() {
   if (!guid.test(config.tenantId) || !guid.test(config.clientId)) throw new Error('CONFIG_MICROSOFT_ID_REQUIRED');
   if (!/^[^\s@]+@[^\s@]+$/.test(config.allowedUsername)) throw new Error('CONFIG_ALLOWED_USER_REQUIRED');
   if (!config.redirects.length || config.redirects.some(uri => !isAllowedMcpRedirect(uri))) throw new Error('CONFIG_MCP_REDIRECT_REQUIRED');
+  try { if (!config.timeZone) throw new Error(); new Intl.DateTimeFormat('en',{timeZone:config.timeZone}); }
+  catch { throw new Error('CONFIG_TIME_ZONE_REQUIRED'); }
   if (!Number.isInteger(maxGraphRequests) || maxGraphRequests < 1 || maxGraphRequests > 32) throw new Error('CONFIG_REQUEST_CAP_INVALID');
   if (!Number.isFinite(Date.parse(config.expiresAt)) || Date.now() >= Date.parse(config.expiresAt)) throw new Error('CONFIG_EXPIRY_REQUIRED');
 }

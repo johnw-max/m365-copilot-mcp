@@ -27,6 +27,7 @@ Copy-Item .env.example .env
 | `M365_MCP_ALLOWED_USERNAME` | 唯一允许登录的用户邮箱；代码核对租户和账号 |
 | `M365_MCP_OAUTH_CLIENT_ID` | MCP 客户端向本服务发起 OAuth 时使用的客户端标识 |
 | `M365_MCP_REDIRECT_URIS` | MCP 客户端的**精确** OAuth 回调 URL，多个用逗号分隔；允许 HTTPS 或 `localhost` / `127.0.0.1` 的 HTTP 回环地址 |
+| `M365_MCP_TIME_ZONE` | 用户所在的 IANA 时区，例如 `Asia/Singapore`；Copilot Chat API 要求在每次问答中提供时区 |
 | `M365_MCP_EXPIRES_AT` | 未来的 UTC 截止时间；到时服务停止，可在部署时设定所需期限 |
 | `M365_MCP_MAX_GRAPH_REQUESTS` | 本进程 Graph 请求总上限，1–32；新会话首轮通常消耗两次请求 |
 | `M365_MCP_PORT` / `M365_MCP_ORIGIN` | 默认 `8787` / `http://127.0.0.1:8787`，两者端口须一致 |
@@ -54,7 +55,7 @@ Copy-Item .env.example .env
 
 | 现象 | 先检查 |
 | --- | --- |
-| 启动时报 `CONFIG_*` | 租户 / 应用 ID 格式、允许邮箱、客户端回调、UTC 截止时间和请求上限 |
+| 启动时报 `CONFIG_*` | 租户 / 应用 ID 格式、允许邮箱、客户端回调、IANA 时区、UTC 截止时间和请求上限 |
 | 客户端连不上 MCP | 服务是否可从客户端访问；客户端是否支持 Streamable HTTP 和 OAuth；端口、地址及回调是否精确一致 |
 | 微软登录完成但连接失败 | 登录账号与 `M365_MCP_ALLOWED_USERNAME`、租户 ID 是否完全匹配；本机 `8788` 端口是否可用 |
 | `GRAPH_HTTP_403` | 用户许可、七项委托权限与组织同意状态；以微软响应和组织管理员日志进一步判别 |

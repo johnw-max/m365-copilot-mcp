@@ -8,6 +8,16 @@ import { buildMcpServer } from './mcp.mjs';
 import { pathToFileURL } from 'node:url';
 import { config, assertRunnableConfig } from './config.mjs';
 
+const maxTimerDelay = 2 ** 31 - 1;
+export function scheduleShutdown(deadline, stop, {now = Date.now, schedule = setTimeout} = {}) {
+  function check() {
+    const remaining = deadline - now();
+    if (remaining <= 0) { void stop(); return; }
+    schedule(check, Math.min(remaining, maxTimerDelay)).unref?.();
+  }
+  check();
+}
+
 export function createApp(origin,options={}) {
   const parsed=new URL(origin);
   if (parsed.origin!==origin || (parsed.protocol!=='https:' && parsed.hostname!=='127.0.0.1')) throw new Error('INVALID_PUBLIC_ORIGIN');
@@ -49,5 +59,5 @@ if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   const listener=app.listen(port,'127.0.0.1',()=>console.log(JSON.stringify({event:'listening',origin,mcp:`${origin}/mcp`})));
   async function stop(){listener.close();await provider.close();process.exit(0);}
   process.on('SIGINT',stop);process.on('SIGTERM',stop);
-  setTimeout(stop,Math.max(1,Date.parse(config.expiresAt)-Date.now())).unref();
+  scheduleShutdown(Date.parse(config.expiresAt),stop);
 }
